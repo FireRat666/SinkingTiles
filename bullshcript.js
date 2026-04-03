@@ -266,7 +266,7 @@
     }
 
     async function handleTileStep(e, tile, mat) {
-        if (e.detail.user && e.detail.user.isLocal && !tile.isSinking && gameState.status === "ACTIVE") {
+        if (!tile.isSinking && gameState.status === "ACTIVE") {
             tile.isSinking = true;
             mat.color = new BS.Vector4(STEPPED_COLOR_VEC[0], STEPPED_COLOR_VEC[1], STEPPED_COLOR_VEC[2], STEPPED_COLOR_VEC[3]);
             if (!isMuted) audio.tick.PlayOneShotFromUrl("https://audiofiles.firer.at/mp3/Tick.mp3");
