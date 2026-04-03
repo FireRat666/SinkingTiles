@@ -248,9 +248,9 @@
                     await tile.AddComponent(new BS.BoxCollider({ size: new BS.Vector3(TILE_SIZE - 0.1, 0.4, TILE_SIZE - 0.1) }));
                     const mat = await tile.AddComponent(new BS.BanterMaterial("Unlit/Diffuse", "", new BS.Vector4(0.2, 0.6, 1, 1), BS.MaterialSide.Front, false, tileName));
 
-                    // Add a separate trigger object slightly above the tile to detect players
-                    const triggerObj = await new BS.GameObject({ name: tileName + "_Trigger", parent: tile, localPosition: new BS.Vector3(0, 0.25, 0) }).Async();
-                    await triggerObj.AddComponent(new BS.BoxCollider({ isTrigger: true, size: new BS.Vector3(TILE_SIZE - 0.5, 0.5, TILE_SIZE - 0.5) }));
+                    // Add a separate trigger object centered so it covers the tile surface and 2m up
+                    const triggerObj = await new BS.GameObject({ name: tileName + "_Trigger", parent: tile, localPosition: new BS.Vector3(0, 1.0, 0) }).Async();
+                    await triggerObj.AddComponent(new BS.BoxCollider({ isTrigger: true, size: new BS.Vector3(TILE_SIZE - 0.5, 2.0, TILE_SIZE - 0.5) }));
                     await triggerObj.AddComponent(new BS.BanterColliderEvents());
                     triggerObj.On("trigger-enter", (e) => handleTileStep(e, tile, mat));
 
@@ -271,7 +271,7 @@
             mat.color = new BS.Vector4(STEPPED_COLOR_VEC[0], STEPPED_COLOR_VEC[1], STEPPED_COLOR_VEC[2], STEPPED_COLOR_VEC[3]);
             if (!isMuted) audio.tick.PlayOneShotFromUrl("https://audiofiles.firer.at/mp3/Tick.mp3");
             await new Promise(resolve => setTimeout(resolve, gameState.sinkDelay));
-            tile.obj.SetActive(false);
+            tile.SetActive(false);
         }
     }
 
