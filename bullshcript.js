@@ -74,9 +74,13 @@
         scene.SetSettings(settings);
 
         // 2. Build visuals/geometry immediately
+        console.log("Sinking Tiles: Building environment objects...");
         await buildEnvironment();
+        console.log("Sinking Tiles: Building grid...");
         await buildGrid();
+        console.log("Sinking Tiles: Building UI...");
         await setupUI();
+        console.log("Sinking Tiles: Building audio...");
         await setupAudio();
 
         // 3. Wait for Unity before user-dependent functions
@@ -87,9 +91,10 @@
                 window.addEventListener("unity-loaded", resolve, { once: true });
             });
         }
-        console.log("Sinking Tiles: Unity Loaded!");
+        console.log("Sinking Tiles: Unity is LOADED!");
 
         // 4. Final setup requiring users/teleportation
+        console.log("Sinking Tiles: Performing initial teleport and starting network sync.");
         scene.TeleportTo(new BS.Vector3(LOBBY_POS_RAW.x, LOBBY_POS_RAW.y, LOBBY_POS_RAW.z), 0, true);
         setupNetworking();
         setInterval(update, 100);
@@ -175,10 +180,8 @@
         await createBtn("ClaimHostBtn", -3, new BS.Vector4(1, 0.8, 0, 1), "CLAIM HOST", () => {
             const currentHostPresent = gameState.currentHostUid && scene.users[gameState.currentHostUid];
             if (!currentHostPresent) {
-                // Immediate claim if host is missing
                 updateState({ currentHostUid: scene.localUser.uid, hostStealStartTime: 0, hostStealRequesterUid: null });
             } else if (gameState.currentHostUid !== scene.localUser.uid) {
-                // Start steal timer
                 updateState({ hostStealStartTime: Date.now(), hostStealRequesterUid: scene.localUser.uid });
             }
         });
@@ -257,28 +260,32 @@
 
         for (let l = 0; l < gameState.numLayers; l++) {
             const ly = -l * LAYER_HEIGHT_OFFSET;
+            const ringPromises = [];
             for (let x = 0; x < GRID_SIZE; x++) {
                 for (let z = 0; z < GRID_SIZE; z++) {
-                    const tileName = `Tile_L${l}_${x}_${z}`;
-                    const tile = await new BS.GameObject({
-                        name: tileName, parent: gridRoot,
-                        localPosition: new BS.Vector3(x * TILE_SIZE - offset, ly, z * TILE_SIZE - offset)
-                    }).Async();
-                    await tile.AddComponent(new BS.BanterBox({ width: TILE_SIZE - 0.1, height: 0.4, depth: TILE_SIZE - 0.1 }));
-                    await tile.AddComponent(new BS.BoxCollider({ size: new BS.Vector3(TILE_SIZE - 0.1, 0.4, TILE_SIZE - 0.1) }));
-                    const mat = await tile.AddComponent(new BS.BanterMaterial("Standard", "", new BS.Vector4(0.2, 0.6, 1, 1), BS.MaterialSide.Front, false, tileName));
-                    const triggerObj = await new BS.GameObject({ name: tileName + "_Trigger", parent: tile, localPosition: new BS.Vector3(0, 1.0, 0) }).Async();
-                    await triggerObj.AddComponent(new BS.BoxCollider({ isTrigger: true, size: new BS.Vector3(TILE_SIZE - 0.5, 2.0, TILE_SIZE - 0.5) }));
-                    await triggerObj.AddComponent(new BS.BanterColliderEvents());
-                    triggerObj.On("trigger-enter", (e) => handleTileStep(e, tile, mat));
-                    tiles.push({ obj: tile, mat: mat, isSinking: false });
+                    ringPromises.push((async (lx, lz) => {
+                        const tileName = `Tile_L${l}_${lx}_${lz}`;
+                        const tile = await new BS.GameObject({
+                            name: tileName, parent: gridRoot,
+                            localPosition: new BS.Vector3(lx * TILE_SIZE - offset, ly, lz * TILE_SIZE - offset)
+                        }).Async();
+                        await tile.AddComponent(new BS.BanterBox({ width: TILE_SIZE - 0.1, height: 0.4, depth: TILE_SIZE - 0.1 }));
+                        await tile.AddComponent(new BS.BoxCollider({ size: new BS.Vector3(TILE_SIZE - 0.1, 0.4, TILE_SIZE - 0.1) }));
+                        const mat = await tile.AddComponent(new BS.BanterMaterial("Standard", "", new BS.Vector4(0.2, 0.6, 1, 1), BS.MaterialSide.Front, false, tileName));
+                        const triggerObj = await new BS.GameObject({ name: tileName + "_Trigger", parent: tile, localPosition: new BS.Vector3(0, 1.0, 0) }).Async();
+                        await triggerObj.AddComponent(new BS.BoxCollider({ isTrigger: true, size: new BS.Vector3(TILE_SIZE - 0.5, 2.0, TILE_SIZE - 0.5) }));
+                        await triggerObj.AddComponent(new BS.BanterColliderEvents());
+                        triggerObj.On("trigger-enter", (e) => handleTileStep(e, tile, mat));
+                        tiles.push({ obj: tile, mat: mat, isSinking: false });
+                    })(x, z));
                 }
             }
+            await Promise.all(ringPromises);
         }
     }
 
     async function resetGrid() {
-        console.log("Resetting Grid.");
+        console.log("Resetting Grid...");
         await buildGrid();
     }
 
@@ -413,7 +420,6 @@
     }
 
     function driveHostLogic(now) {
-        // Handle host steal countdown
         if (gameState.hostStealStartTime > 0) {
             if (now - gameState.hostStealStartTime >= TIMINGS.HOST_STEAL_DURATION) {
                 updateState({
