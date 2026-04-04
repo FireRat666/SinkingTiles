@@ -155,7 +155,7 @@
             await btn.AddComponent(new BS.BanterMaterial({ shaderName: "Standard", color: color }));
             btn.SetLayer(5);
 
-            const t = await new BS.GameObject({ name: name + "Text", parent: btn, localPosition: new BS.Vector3(0, 0.5, 0), localEulerAngles: new BS.Vector3(0, 0, 0) }).Async();
+            const t = await new BS.GameObject({ name: name + "Text", parent: btn, localPosition: new BS.Vector3(0, 0.4, 0), localEulerAngles: new BS.Vector3(0, 0, 0) }).Async();
             await t.AddComponent(new BS.BanterText({
                 text: text, fontSize: 1, color: new BS.Vector4(1, 1, 1, 1),
                 horizontalAlignment: BS.HorizontalAlignment.Center, verticalAlignment: BS.VerticalAlignment.Middle
