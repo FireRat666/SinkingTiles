@@ -15,7 +15,8 @@
     const STEPPED_COLOR_VEC = [0.8, 0.8, 0.8, 1]; // Light grey
 
     const TIMINGS = {
-        GAME_OVER_DELAY: 5000
+        GAME_OVER_DELAY: 5000,
+        HOST_STEAL_DURATION: 30000
     };
 
     // --- State Variables ---
@@ -25,7 +26,10 @@
         sinkDelay: DEFAULT_SINK_DELAY_MS,
         playersAlive: {}, // uid -> true
         lastPlayerStanding: null,
-        multiplayerSession: false
+        multiplayerSession: false,
+        currentHostUid: null,
+        hostStealStartTime: 0,
+        hostStealRequesterUid: null
     };
 
     let tiles = [];
@@ -36,6 +40,7 @@
     let scoreboardFalls = null;
     let scoreboardSurvival = null;
     let scoreboardWins = null;
+    let hostDisplay = null;
     let lastFallTime = 0;
 
     // Local player game session tracking
@@ -43,9 +48,12 @@
 
     // --- Utils ---
     const isHost = () => {
-        if (!scene || !scene.localUser || !scene.users) return false;
-        const uids = Object.keys(scene.users).sort();
-        return uids.length > 0 && uids[0] === scene.localUser.uid;
+        if (!scene || !scene.localUser) return false;
+        if (!gameState.currentHostUid) {
+            const uids = Object.keys(scene.users || {}).sort();
+            return uids.length > 0 && uids[0] === scene.localUser.uid;
+        }
+        return gameState.currentHostUid === scene.localUser.uid;
     };
 
     // --- Initialization ---
@@ -53,30 +61,9 @@
         if (scene) return;
         scene = BS.BanterScene.GetInstance();
 
-        console.log("Sinking Tiles: Calling setupSettings before Unity load check.");
-        setupSettings();
+        console.log("Sinking Tiles: BS Ready. Building Environment...");
 
-        if (!scene.unityLoaded) {
-            console.log("Sinking Tiles: Waiting for Unity...");
-            await new Promise(resolve => {
-                scene.On("unity-loaded", resolve);
-                window.addEventListener("unity-loaded", resolve, { once: true });
-            });
-        }
-        console.log("Sinking Tiles: Unity Loaded!");
-
-        await buildEnvironment();
-        await buildGrid();
-        await setupUI();
-        await setupAudio();
-
-        setupNetworking();
-
-        setInterval(update, 100);
-        console.log("Sinking Tiles: Init Complete");
-    }
-
-    function setupSettings() {
+        // 1. Setup static scene settings immediately
         const settings = new BS.SceneSettings();
         settings.EnableTeleport = true;
         settings.EnableJump = true;
@@ -84,16 +71,29 @@
         settings.RefreshRate = 72;
         settings.ClippingPlane = new BS.Vector2(0.05, 500);
         settings.SpawnPoint = new BS.Vector4(LOBBY_POS_RAW.x, LOBBY_POS_RAW.y, LOBBY_POS_RAW.z, 0);
-
-        console.log("Sinking Tiles: Applying scene settings.");
         scene.SetSettings(settings);
-        scene.TeleportTo(new BS.Vector3(LOBBY_POS_RAW.x, LOBBY_POS_RAW.y, LOBBY_POS_RAW.z), 0, true);
 
-        setTimeout(() => {
-            console.log("Sinking Tiles: Re-applying settings via timeout.");
-            scene.SetSettings(settings);
-            scene.TeleportTo(new BS.Vector3(LOBBY_POS_RAW.x, LOBBY_POS_RAW.y, LOBBY_POS_RAW.z), 0, true);
-        }, 2000);
+        // 2. Build visuals/geometry immediately
+        await buildEnvironment();
+        await buildGrid();
+        await setupUI();
+        await setupAudio();
+
+        // 3. Wait for Unity before user-dependent functions
+        if (!scene.unityLoaded) {
+            console.log("Sinking Tiles: Waiting for Unity for user functions...");
+            await new Promise(resolve => {
+                scene.On("unity-loaded", resolve);
+                window.addEventListener("unity-loaded", resolve, { once: true });
+            });
+        }
+        console.log("Sinking Tiles: Unity Loaded!");
+
+        // 4. Final setup requiring users/teleportation
+        scene.TeleportTo(new BS.Vector3(LOBBY_POS_RAW.x, LOBBY_POS_RAW.y, LOBBY_POS_RAW.z), 0, true);
+        setupNetworking();
+        setInterval(update, 100);
+        console.log("Sinking Tiles: Init Complete");
     }
 
     async function buildEnvironment() {
@@ -112,6 +112,15 @@
             fontSize: 0.6,
             color: new BS.Vector4(1, 1, 1, 1),
             horizontalAlignment: BS.HorizontalAlignment.Left
+        }));
+
+        // Host Display
+        const hostObj = await new BS.GameObject({ name: "HostDisplay", parent: floor, localPosition: new BS.Vector3(0, 4, 12), localEulerAngles: new BS.Vector3(0, 180, 0) }).Async();
+        hostDisplay = await hostObj.AddComponent(new BS.BanterText({
+            text: "Waiting for Unity...",
+            fontSize: 0.8,
+            color: new BS.Vector4(1, 1, 0, 1),
+            horizontalAlignment: BS.HorizontalAlignment.Center
         }));
 
         // Scoreboard
@@ -163,7 +172,18 @@
             updateState({ numLayers: l });
         });
 
-        await createBtn("JoinBtn", -3, new BS.Vector4(0, 0.5, 1, 1), "JOIN GAME", () => {
+        await createBtn("ClaimHostBtn", -3, new BS.Vector4(1, 0.8, 0, 1), "CLAIM HOST", () => {
+            const currentHostPresent = gameState.currentHostUid && scene.users[gameState.currentHostUid];
+            if (!currentHostPresent) {
+                // Immediate claim if host is missing
+                updateState({ currentHostUid: scene.localUser.uid, hostStealStartTime: 0, hostStealRequesterUid: null });
+            } else if (gameState.currentHostUid !== scene.localUser.uid) {
+                // Start steal timer
+                updateState({ hostStealStartTime: Date.now(), hostStealRequesterUid: scene.localUser.uid });
+            }
+        });
+
+        await createBtn("JoinBtn", 0, new BS.Vector4(0, 0.5, 1, 1), "JOIN GAME", () => {
             console.log("Join Game clicked.");
             scene.TeleportTo(new BS.Vector3(0, GAME_ARENA_TOP_Y + 2, 0), 0, true);
             localGameStartTime = Date.now();
@@ -172,14 +192,14 @@
             }
         });
 
-        await createBtn("MuteBtn", 0, new BS.Vector4(0.5, 0.2, 0.8, 1), "MUTE AUDIO", async (e) => {
+        await createBtn("MuteBtn", 3, new BS.Vector4(0.5, 0.2, 0.8, 1), "MUTE AUDIO", async (e) => {
             isMuted = !isMuted;
             const btnObj = e.detail.object || await scene.Find("MuteBtn");
             const txt = await btnObj.GetComponent(BS.CT.BanterText) || (await scene.Find("MuteBtnText")).GetComponent(BS.CT.BanterText);
             if (txt) txt.text = isMuted ? "UNMUTE AUDIO" : "MUTE AUDIO";
         });
 
-        await createBtn("ResetBtn", 3, new BS.Vector4(0.5, 0.5, 0.5, 1), "RESET GAME", () => {
+        await createBtn("ResetBtn", 6, new BS.Vector4(0.5, 0.5, 0.5, 1), "RESET GAME", () => {
             if (!isHost()) return;
             updateState({ status: "LOBBY", playersAlive: {}, lastPlayerStanding: null, multiplayerSession: false });
             resetGrid();
@@ -192,10 +212,7 @@
         arenaTracker.On("trigger-enter", (e) => {
             if (e.detail.user) {
                 const user = e.detail.user;
-                if (user.isLocal) {
-                    console.log("Local player in arena.");
-                    isLocalInArena = true;
-                }
+                if (user.isLocal) { isLocalInArena = true; }
                 if (isHost()) {
                     let alive = { ...gameState.playersAlive, [user.uid]: true };
                     updateState({ playersAlive: alive });
@@ -205,10 +222,7 @@
         arenaTracker.On("trigger-exit", (e) => {
             if (e.detail.user) {
                 const user = e.detail.user;
-                if (user.isLocal) {
-                    console.log("Local player left arena.");
-                    isLocalInArena = false;
-                }
+                if (user.isLocal) { isLocalInArena = false; }
                 if (isHost()) {
                     let alive = { ...gameState.playersAlive };
                     delete alive[user.uid];
@@ -217,7 +231,7 @@
             }
         });
 
-        // Dead Zone (below lowest possible layer)
+        // Dead Zone
         const deadZone = await new BS.GameObject({ name: "DeadZone", localPosition: new BS.Vector3(0, -10, 0) }).Async();
         await deadZone.AddComponent(new BS.BoxCollider({ isTrigger: true, size: new BS.Vector3(100, 2, 100) }));
         await deadZone.AddComponent(new BS.BanterColliderEvents());
@@ -253,13 +267,10 @@
                     await tile.AddComponent(new BS.BanterBox({ width: TILE_SIZE - 0.1, height: 0.4, depth: TILE_SIZE - 0.1 }));
                     await tile.AddComponent(new BS.BoxCollider({ size: new BS.Vector3(TILE_SIZE - 0.1, 0.4, TILE_SIZE - 0.1) }));
                     const mat = await tile.AddComponent(new BS.BanterMaterial("Standard", "", new BS.Vector4(0.2, 0.6, 1, 1), BS.MaterialSide.Front, false, tileName));
-
-                    // Add a separate trigger object centered so it covers the tile surface and 2m up
                     const triggerObj = await new BS.GameObject({ name: tileName + "_Trigger", parent: tile, localPosition: new BS.Vector3(0, 1.0, 0) }).Async();
                     await triggerObj.AddComponent(new BS.BoxCollider({ isTrigger: true, size: new BS.Vector3(TILE_SIZE - 0.5, 2.0, TILE_SIZE - 0.5) }));
                     await triggerObj.AddComponent(new BS.BanterColliderEvents());
                     triggerObj.On("trigger-enter", (e) => handleTileStep(e, tile, mat));
-
                     tiles.push({ obj: tile, mat: mat, isSinking: false });
                 }
             }
@@ -307,6 +318,15 @@
             if (e.detail.changes.some(c => c.property === STATE_KEY)) sync();
             updateScoreboard();
         });
+        scene.On("user-left", (e) => {
+            if (isHost() && e.detail.uid === gameState.currentHostUid) {
+                const uids = Object.keys(scene.users).filter(id => id !== e.detail.uid).sort();
+                if (uids.length > 0) updateState({ currentHostUid: uids[0], hostStealStartTime: 0, hostStealRequesterUid: null });
+            }
+            if (isHost() && e.detail.uid === gameState.hostStealRequesterUid) {
+                updateState({ hostStealStartTime: 0, hostStealRequesterUid: null });
+            }
+        });
         sync();
         updateScoreboard();
     }
@@ -323,6 +343,18 @@
         const layerTxt = await (await scene.Find("LayersBtnText"))?.GetComponent(BS.CT.BanterText);
         if (layerTxt) layerTxt.text = `LAYERS: ${gameState.numLayers}`;
 
+        if (hostDisplay) {
+            const hostUser = scene.users[gameState.currentHostUid];
+            const requester = scene.users[gameState.hostStealRequesterUid];
+            if (gameState.hostStealStartTime > 0 && requester) {
+                const elapsed = Date.now() - gameState.hostStealStartTime;
+                const remaining = Math.max(0, Math.ceil((TIMINGS.HOST_STEAL_DURATION - elapsed) / 1000));
+                hostDisplay.text = `<color=#ff0000>STEALING HOST: ${remaining}s</color>\n(Requested by: ${requester.name})`;
+            } else {
+                hostDisplay.text = hostUser ? `CURRENT HOST: ${hostUser.name}` : "NO HOST ASSIGNED";
+            }
+        }
+
         if (oldLayers !== gameState.numLayers || (oldStatus === "GAME_OVER" && gameState.status === "LOBBY")) {
             resetGrid();
         }
@@ -337,14 +369,12 @@
                 try { players.push(JSON.parse(state[key])); } catch (e) {}
             }
         });
-
         const updateBoard = (comp, title, sorted, formatter) => {
             let str = `<size=1.2><b>${title}</b></size>\n\n`;
             if (sorted.length === 0) str += "No records!";
             else sorted.forEach((p, i) => str += `${i+1}. ${p.name}: ${formatter(p)}\n`);
             comp.text = str;
         };
-
         updateBoard(scoreboardFalls, "MOST FALLS", [...players].sort((a,b)=>b.falls-a.falls).slice(0,10), p=>p.falls);
         updateBoard(scoreboardSurvival, "BEST SURVIVAL", [...players].sort((a,b)=>b.bestSurvival-a.bestSurvival).slice(0,10), p=>(p.bestSurvival/1000).toFixed(1)+"s");
         updateBoard(scoreboardWins, "MOST WINS", [...players].sort((a,b)=>b.wins-a.wins).slice(0,10), p=>p.wins);
@@ -383,14 +413,22 @@
     }
 
     function driveHostLogic(now) {
+        // Handle host steal countdown
+        if (gameState.hostStealStartTime > 0) {
+            if (now - gameState.hostStealStartTime >= TIMINGS.HOST_STEAL_DURATION) {
+                updateState({
+                    currentHostUid: gameState.hostStealRequesterUid,
+                    hostStealStartTime: 0,
+                    hostStealRequesterUid: null
+                });
+            }
+        }
+
         if (gameState.status === "ACTIVE") {
             const alive = Object.keys(gameState.playersAlive);
-
-            // Check if this session has multiple players
             if (alive.length > 1 && !gameState.multiplayerSession) {
                 updateState({ multiplayerSession: true });
             }
-
             if (gameState.multiplayerSession && alive.length === 1) {
                 updateState({ status: "GAME_OVER", lastPlayerStanding: alive[0], multiplayerSession: false });
                 updateWinnerStats(alive[0]);
