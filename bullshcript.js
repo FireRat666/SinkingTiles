@@ -16,12 +16,13 @@
 
     const TIMINGS = {
         GAME_OVER_DELAY: 5000,
+        STARTUP_DELAY: 5000,
         HOST_STEAL_DURATION: 30000
     };
 
     // --- State Variables ---
     let gameState = {
-        status: "LOBBY", // LOBBY, ACTIVE, GAME_OVER
+        status: "LOBBY", // LOBBY, STARTING, ACTIVE, GAME_OVER
         numLayers: DEFAULT_NUM_LAYERS,
         sinkDelay: DEFAULT_SINK_DELAY_MS,
         playersAlive: {}, // uid -> true
@@ -29,7 +30,8 @@
         multiplayerSession: false,
         currentHostUid: null,
         hostStealStartTime: 0,
-        hostStealRequesterUid: null
+        hostStealRequesterUid: null,
+        endTime: 0
     };
 
     let tiles = [];
@@ -63,7 +65,6 @@
 
         console.log("Sinking Tiles: BS Ready. Building Environment...");
 
-        // 1. Setup static scene settings immediately
         const settings = new BS.SceneSettings();
         settings.EnableTeleport = true;
         settings.EnableJump = true;
@@ -73,7 +74,6 @@
         settings.SpawnPoint = new BS.Vector4(LOBBY_POS_RAW.x, LOBBY_POS_RAW.y, LOBBY_POS_RAW.z, 0);
         scene.SetSettings(settings);
 
-        // 2. Build visuals/geometry immediately
         console.log("Sinking Tiles: Building environment objects...");
         await buildEnvironment();
         console.log("Sinking Tiles: Building grid...");
@@ -83,7 +83,6 @@
         console.log("Sinking Tiles: Building audio...");
         await setupAudio();
 
-        // 3. Wait for Unity before user-dependent functions
         if (!scene.unityLoaded) {
             console.log("Sinking Tiles: Waiting for Unity for user functions...");
             await new Promise(resolve => {
@@ -93,7 +92,6 @@
         }
         console.log("Sinking Tiles: Unity is LOADED!");
 
-        // 4. Final setup requiring users/teleportation
         console.log("Sinking Tiles: Performing initial teleport and starting network sync.");
         scene.TeleportTo(new BS.Vector3(LOBBY_POS_RAW.x, LOBBY_POS_RAW.y, LOBBY_POS_RAW.z), 0, true);
         setupNetworking();
@@ -130,7 +128,6 @@
 
         // Scoreboard
         const boardRoot = await new BS.GameObject({ name: "Scoreboards", parent: floor, localPosition: new BS.Vector3(12, 3, 0), localEulerAngles: new BS.Vector3(0, 90, 0) }).Async();
-
         const createBoard = async (name, x, label) => {
             const obj = await new BS.GameObject({ name: name, parent: boardRoot, localPosition: new BS.Vector3(x, 0, 0) }).Async();
             return await obj.AddComponent(new BS.BanterText({
@@ -140,27 +137,20 @@
                 horizontalAlignment: BS.HorizontalAlignment.Center
             }));
         };
-
         scoreboardFalls = await createBoard("FallsBoard", -6, "MOST FALLS");
         scoreboardSurvival = await createBoard("SurvivalBoard", 0, "BEST SURVIVAL");
         scoreboardWins = await createBoard("WinsBoard", 6, "MOST WINS");
 
         // Controls
         const buttonGroup = await new BS.GameObject({ name: "Controls", parent: floor, localPosition: new BS.Vector3(0, 1, 3) }).Async();
-
         const createBtn = async (name, xPos, color, text, handler) => {
             const btn = await new BS.GameObject({ name: name, parent: buttonGroup, localPosition: new BS.Vector3(xPos, 0, 0) }).Async();
             await btn.AddComponent(new BS.BanterBox({ width: 1, height: 0.4, depth: 0.5 }));
             await btn.AddComponent(new BS.BoxCollider({ size: new BS.Vector3(1, 0.4, 0.5) }));
             await btn.AddComponent(new BS.BanterMaterial({ shaderName: "Standard", color: color }));
             btn.SetLayer(5);
-
-            const t = await new BS.GameObject({ name: name + "Text", parent: btn, localPosition: new BS.Vector3(0, 0.4, 0), localEulerAngles: new BS.Vector3(0, 0, 0) }).Async();
-            await t.AddComponent(new BS.BanterText({
-                text: text, fontSize: 1, color: new BS.Vector4(1, 1, 1, 1),
-                horizontalAlignment: BS.HorizontalAlignment.Center, verticalAlignment: BS.VerticalAlignment.Middle
-            }));
-
+            const t = await new BS.GameObject({ name: name + "Text", parent: btn, localPosition: new BS.Vector3(0, 0.4, 0) }).Async();
+            await t.AddComponent(new BS.BanterText({ text: text, fontSize: 1, color: new BS.Vector4(1, 1, 1, 1), horizontalAlignment: BS.HorizontalAlignment.Center }));
             btn.On("click", handler);
             return btn;
         };
@@ -189,9 +179,8 @@
         await createBtn("JoinBtn", 0, new BS.Vector4(0, 0.5, 1, 1), "JOIN GAME", () => {
             console.log("Join Game clicked.");
             scene.TeleportTo(new BS.Vector3(0, GAME_ARENA_TOP_Y + 2, 0), 0, true);
-            localGameStartTime = Date.now();
             if (isHost() && gameState.status === "LOBBY") {
-                updateState({ status: "ACTIVE" });
+                updateState({ status: "STARTING", endTime: Date.now() + TIMINGS.STARTUP_DELAY });
             }
         });
 
@@ -204,8 +193,9 @@
 
         await createBtn("ResetBtn", 6, new BS.Vector4(0.5, 0.5, 0.5, 1), "RESET GAME", () => {
             if (!isHost()) return;
-            updateState({ status: "LOBBY", playersAlive: {}, lastPlayerStanding: null, multiplayerSession: false });
-            resetGrid();
+            console.log("Host manually reset the game. Rebuilding grid...");
+            updateState({ status: "LOBBY", playersAlive: {}, lastPlayerStanding: null, multiplayerSession: false, endTime: 0 });
+            buildGrid();
         });
 
         // Arena Tracker
@@ -215,17 +205,20 @@
         arenaTracker.On("trigger-enter", (e) => {
             if (e.detail.user) {
                 const user = e.detail.user;
-                if (user.isLocal) { isLocalInArena = true; }
+                if (user.isLocal) isLocalInArena = true;
                 if (isHost()) {
                     let alive = { ...gameState.playersAlive, [user.uid]: true };
                     updateState({ playersAlive: alive });
+                    if (gameState.status === "LOBBY") {
+                        updateState({ status: "STARTING", endTime: Date.now() + TIMINGS.STARTUP_DELAY });
+                    }
                 }
             }
         });
         arenaTracker.On("trigger-exit", (e) => {
             if (e.detail.user) {
                 const user = e.detail.user;
-                if (user.isLocal) { isLocalInArena = false; }
+                if (user.isLocal) isLocalInArena = false;
                 if (isHost()) {
                     let alive = { ...gameState.playersAlive };
                     delete alive[user.uid];
@@ -284,11 +277,6 @@
         }
     }
 
-    async function resetGrid() {
-        console.log("Resetting Grid...");
-        await buildGrid();
-    }
-
     async function handleTileStep(e, tile, mat) {
         if (!tile.isSinking && gameState.status === "ACTIVE") {
             tile.isSinking = true;
@@ -341,7 +329,6 @@
     async function sync() {
         const raw = scene.spaceState.public[STATE_KEY];
         if (!raw) return;
-        const oldStatus = gameState.status;
         const oldLayers = gameState.numLayers;
         gameState = JSON.parse(raw);
 
@@ -362,8 +349,10 @@
             }
         }
 
-        if (oldLayers !== gameState.numLayers || (oldStatus === "GAME_OVER" && gameState.status === "LOBBY")) {
-            resetGrid();
+        // Only auto-rebuild if layers change
+        if (oldLayers !== gameState.numLayers) {
+            console.log("Layers changed via sync. Rebuilding grid...");
+            await buildGrid();
         }
     }
 
@@ -372,9 +361,7 @@
         const state = scene.spaceState.public;
         const players = [];
         Object.keys(state).forEach(key => {
-            if (key.startsWith(USER_DATA_KEY_PREFIX)) {
-                try { players.push(JSON.parse(state[key])); } catch (e) {}
-            }
+            if (key.startsWith(USER_DATA_KEY_PREFIX)) { try { players.push(JSON.parse(state[key])); } catch (e) {} }
         });
         const updateBoard = (comp, title, sorted, formatter) => {
             let str = `<size=1.2><b>${title}</b></size>\n\n`;
@@ -412,6 +399,10 @@
         const now = Date.now();
         let displayStr = "";
         if (gameState.status === "LOBBY") displayStr = "SINKING TILES";
+        else if (gameState.status === "STARTING") {
+            const remaining = Math.max(0, Math.ceil((gameState.endTime - now) / 1000));
+            displayStr = `GAME STARTING IN: ${remaining}`;
+        }
         else if (gameState.status === "ACTIVE") displayStr = `PLAYERS: ${Object.keys(gameState.playersAlive).length}`;
         else displayStr = gameState.lastPlayerStanding ? `${scene.users[gameState.lastPlayerStanding]?.name || "PLAYER"} WINS!` : "GAME OVER";
 
@@ -422,12 +413,13 @@
     function driveHostLogic(now) {
         if (gameState.hostStealStartTime > 0) {
             if (now - gameState.hostStealStartTime >= TIMINGS.HOST_STEAL_DURATION) {
-                updateState({
-                    currentHostUid: gameState.hostStealRequesterUid,
-                    hostStealStartTime: 0,
-                    hostStealRequesterUid: null
-                });
+                updateState({ currentHostUid: gameState.hostStealRequesterUid, hostStealStartTime: 0, hostStealRequesterUid: null });
             }
+        }
+
+        if (gameState.status === "STARTING" && now >= gameState.endTime) {
+            updateState({ status: "ACTIVE" });
+            localGameStartTime = now;
         }
 
         if (gameState.status === "ACTIVE") {
