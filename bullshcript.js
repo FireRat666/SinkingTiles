@@ -120,10 +120,10 @@
         }));
 
         // Host Display
-        const hostObj = await new BS.GameObject({ name: "HostDisplay", parent: floor, localPosition: new BS.Vector3(0, 4, 12), localEulerAngles: new BS.Vector3(0, 180, 0) }).Async();
+        const hostObj = await new BS.GameObject({ name: "HostDisplay", parent: floor, localPosition: new BS.Vector3(0, 3.5, 12), localEulerAngles: new BS.Vector3(0, 0, 0) }).Async();
         hostDisplay = await hostObj.AddComponent(new BS.BanterText({
             text: "Waiting for Unity...",
-            fontSize: 0.8,
+            fontSize: 3,
             color: new BS.Vector4(1, 1, 0, 1),
             horizontalAlignment: BS.HorizontalAlignment.Center
         }));
@@ -146,7 +146,7 @@
         scoreboardWins = await createBoard("WinsBoard", 6, "MOST WINS");
 
         // Controls
-        const buttonGroup = await new BS.GameObject({ name: "Controls", parent: floor, localPosition: new BS.Vector3(0, 1, 0) }).Async();
+        const buttonGroup = await new BS.GameObject({ name: "Controls", parent: floor, localPosition: new BS.Vector3(0, 1, 3) }).Async();
 
         const createBtn = async (name, xPos, color, text, handler) => {
             const btn = await new BS.GameObject({ name: name, parent: buttonGroup, localPosition: new BS.Vector3(xPos, 0, 0) }).Async();
