@@ -24,7 +24,8 @@
         numLayers: DEFAULT_NUM_LAYERS,
         sinkDelay: DEFAULT_SINK_DELAY_MS,
         playersAlive: {}, // uid -> true
-        lastPlayerStanding: null
+        lastPlayerStanding: null,
+        multiplayerSession: false
     };
 
     let tiles = [];
@@ -180,7 +181,7 @@
 
         await createBtn("ResetBtn", 3, new BS.Vector4(0.5, 0.5, 0.5, 1), "RESET GAME", () => {
             if (!isHost()) return;
-            updateState({ status: "LOBBY", playersAlive: {}, lastPlayerStanding: null });
+            updateState({ status: "LOBBY", playersAlive: {}, lastPlayerStanding: null, multiplayerSession: false });
             resetGrid();
         });
 
@@ -189,23 +190,28 @@
         await arenaTracker.AddComponent(new BS.BoxCollider({ isTrigger: true, size: new BS.Vector3(GRID_SIZE * TILE_SIZE, 30, GRID_SIZE * TILE_SIZE) }));
         await arenaTracker.AddComponent(new BS.BanterColliderEvents());
         arenaTracker.On("trigger-enter", (e) => {
-            if (e.detail.user && e.detail.user.isLocal) {
-                console.log("Local player in arena.");
-                isLocalInArena = true;
+            if (e.detail.user) {
+                const user = e.detail.user;
+                if (user.isLocal) {
+                    console.log("Local player in arena.");
+                    isLocalInArena = true;
+                }
                 if (isHost()) {
-                    let alive = { ...gameState.playersAlive, [e.detail.user.uid]: true };
+                    let alive = { ...gameState.playersAlive, [user.uid]: true };
                     updateState({ playersAlive: alive });
-                    if (gameState.status === "LOBBY") updateState({ status: "ACTIVE" });
                 }
             }
         });
         arenaTracker.On("trigger-exit", (e) => {
-            if (e.detail.user && e.detail.user.isLocal) {
-                console.log("Local player left arena.");
-                isLocalInArena = false;
+            if (e.detail.user) {
+                const user = e.detail.user;
+                if (user.isLocal) {
+                    console.log("Local player left arena.");
+                    isLocalInArena = false;
+                }
                 if (isHost()) {
                     let alive = { ...gameState.playersAlive };
-                    delete alive[e.detail.user.uid];
+                    delete alive[user.uid];
                     updateState({ playersAlive: alive });
                 }
             }
@@ -379,12 +385,18 @@
     function driveHostLogic(now) {
         if (gameState.status === "ACTIVE") {
             const alive = Object.keys(gameState.playersAlive);
-            if (alive.length === 1 && Object.keys(scene.users).length > 1) {
-                updateState({ status: "GAME_OVER", lastPlayerStanding: alive[0] });
+
+            // Check if this session has multiple players
+            if (alive.length > 1 && !gameState.multiplayerSession) {
+                updateState({ multiplayerSession: true });
+            }
+
+            if (gameState.multiplayerSession && alive.length === 1) {
+                updateState({ status: "GAME_OVER", lastPlayerStanding: alive[0], multiplayerSession: false });
                 updateWinnerStats(alive[0]);
                 setTimeout(() => updateState({ status: "LOBBY", playersAlive: {}, lastPlayerStanding: null }), TIMINGS.GAME_OVER_DELAY);
             } else if (alive.length === 0) {
-                updateState({ status: "LOBBY", playersAlive: {}, lastPlayerStanding: null });
+                updateState({ status: "LOBBY", playersAlive: {}, lastPlayerStanding: null, multiplayerSession: false });
             }
         }
     }
