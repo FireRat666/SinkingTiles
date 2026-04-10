@@ -66,7 +66,7 @@
         console.log("Sinking Tiles: BS Ready. Building Environment...");
 
         const settings = new BS.SceneSettings();
-        settings.EnableTeleport = true;
+        settings.EnableTeleport = false;
         settings.EnableJump = true;
         settings.MaxOccupancy = 30;
         settings.RefreshRate = 72;
@@ -171,7 +171,9 @@
             const currentHostPresent = gameState.currentHostUid && scene.users[gameState.currentHostUid];
             if (!currentHostPresent) {
                 updateState({ currentHostUid: scene.localUser.uid, hostStealStartTime: 0, hostStealRequesterUid: null });
-            } else if (gameState.currentHostUid !== scene.localUser.uid) {
+            } else if (gameState.currentHostUid === scene.localUser.uid) {
+                updateState({ hostStealStartTime: 0, hostStealRequesterUid: null });
+            } else {
                 updateState({ hostStealStartTime: Date.now(), hostStealRequesterUid: scene.localUser.uid });
             }
         });
@@ -179,7 +181,7 @@
         await createBtn("JoinBtn", 0, new BS.Vector4(0, 0.5, 1, 1), "JOIN GAME", () => {
             console.log("Join Game clicked.");
             scene.TeleportTo(new BS.Vector3(0, GAME_ARENA_TOP_Y + 2, 0), 0, true);
-            if (isHost() && gameState.status === "LOBBY") {
+            if (gameState.status === "LOBBY") {
                 updateState({ status: "STARTING", endTime: Date.now() + TIMINGS.STARTUP_DELAY });
             }
         });
@@ -337,18 +339,6 @@
         const layerTxt = await (await scene.Find("LayersBtnText"))?.GetComponent(BS.CT.BanterText);
         if (layerTxt) layerTxt.text = `LAYERS: ${gameState.numLayers}`;
 
-        if (hostDisplay) {
-            const hostUser = scene.users[gameState.currentHostUid];
-            const requester = scene.users[gameState.hostStealRequesterUid];
-            if (gameState.hostStealStartTime > 0 && requester) {
-                const elapsed = Date.now() - gameState.hostStealStartTime;
-                const remaining = Math.max(0, Math.ceil((TIMINGS.HOST_STEAL_DURATION - elapsed) / 1000));
-                hostDisplay.text = `<color=#ff0000>STEALING HOST: ${remaining}s</color>\n(Requested by: ${requester.name})`;
-            } else {
-                hostDisplay.text = hostUser ? `CURRENT HOST: ${hostUser.name}` : "NO HOST ASSIGNED";
-            }
-        }
-
         // Only auto-rebuild if layers change
         if (oldLayers !== gameState.numLayers) {
             console.log("Layers changed via sync. Rebuilding grid...");
@@ -369,9 +359,9 @@
             else sorted.forEach((p, i) => str += `${i+1}. ${p.name}: ${formatter(p)}\n`);
             comp.text = str;
         };
-        updateBoard(scoreboardFalls, "MOST FALLS", [...players].sort((a,b)=>b.falls-a.falls).slice(0,10), p=>p.falls);
-        updateBoard(scoreboardSurvival, "BEST SURVIVAL", [...players].sort((a,b)=>b.bestSurvival-a.bestSurvival).slice(0,10), p=>(p.bestSurvival/1000).toFixed(1)+"s");
-        updateBoard(scoreboardWins, "MOST WINS", [...players].sort((a,b)=>b.wins-a.wins).slice(0,10), p=>p.wins);
+        updateBoard(scoreboardFalls, "MOST FALLS", [...players].sort((a,b)=>b.falls-a.falls).slice(0,50), p=>p.falls);
+        updateBoard(scoreboardSurvival, "BEST SURVIVAL", [...players].sort((a,b)=>b.bestSurvival-a.bestSurvival).slice(0,50), p=>(p.bestSurvival/1000).toFixed(1)+"s");
+        updateBoard(scoreboardWins, "MOST WINS", [...players].sort((a,b)=>b.wins-a.wins).slice(0,50), p=>p.wins);
     }
 
     function updateUserStats(survivalTime) {
@@ -407,6 +397,19 @@
         else displayStr = gameState.lastPlayerStanding ? `${scene.users[gameState.lastPlayerStanding]?.name || "PLAYER"} WINS!` : "GAME OVER";
 
         ui.displays.forEach(d => d.text.text = displayStr);
+
+        if (hostDisplay) {
+            const hostUser = scene.users[gameState.currentHostUid];
+            const requester = scene.users[gameState.hostStealRequesterUid];
+            if (gameState.hostStealStartTime > 0 && requester) {
+                const elapsed = Date.now() - gameState.hostStealStartTime;
+                const remaining = Math.max(0, Math.ceil((TIMINGS.HOST_STEAL_DURATION - elapsed) / 1000));
+                hostDisplay.text = `<color=#ff0000>STEALING HOST: ${remaining}s</color>\n(Requested by: ${requester.name})`;
+            } else {
+                hostDisplay.text = hostUser ? `CURRENT HOST: ${hostUser.name}` : "NO HOST ASSIGNED";
+            }
+        }
+
         if (isHost()) driveHostLogic(now);
     }
 
