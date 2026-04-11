@@ -269,7 +269,7 @@
                         const mat = await tile.AddComponent(new BS.BanterMaterial("Standard", "", new BS.Vector4(0.2, 0.6, 1, 1), BS.MaterialSide.Front, false, tileName));
                         const triggerObj = await new BS.GameObject({ name: tileName + "_Trigger", parent: tile, localPosition: new BS.Vector3(0, 1.0, 0) }).Async();
                         await triggerObj.AddComponent(new BS.BoxCollider({ isTrigger: true, size: new BS.Vector3(TILE_SIZE, 2.0, TILE_SIZE) }));
-                        await tile.AddComponent(new BS.BanterMaterial("Unlit/DiffuseTransparent", "", new BS.Vector4(0.2, 0.6, 1, 0.2), BS.MaterialSide.Front, false));
+                        await triggerObj.AddComponent(new BS.BanterMaterial("Unlit/DiffuseTransparent", "", new BS.Vector4(0.2, 0.6, 1, 0.2), BS.MaterialSide.Front, false));
                         await triggerObj.AddComponent(new BS.BanterColliderEvents());
                         triggerObj.On("trigger-enter", (e) => handleTileStep(e, tile, mat));
                         tiles.push({ obj: tile, mat: mat, isSinking: false });
