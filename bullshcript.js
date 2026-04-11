@@ -44,6 +44,7 @@
     let scoreboardWins = null;
     let hostDisplay = null;
     let lastFallTime = 0;
+    let userHandColliders = new Map(); // uid -> [LHandObj, RHandObj]
 
     // Local player game session tracking
     let localGameStartTime = 0;
@@ -92,9 +93,10 @@
         }
         console.log("Sinking Tiles: Unity is LOADED!");
 
-        console.log("Sinking Tiles: Performing initial teleport and starting network sync.");
+        console.log("Sinking Tiles: Performing final setup...");
         scene.TeleportTo(new BS.Vector3(LOBBY_POS_RAW.x, LOBBY_POS_RAW.y, LOBBY_POS_RAW.z), 0, true);
         setupNetworking();
+        setupPlayerHandColliders();
         setInterval(update, 100);
         console.log("Sinking Tiles: Init Complete");
     }
@@ -211,9 +213,7 @@
                 if (isHost()) {
                     let alive = { ...gameState.playersAlive, [user.uid]: true };
                     updateState({ playersAlive: alive });
-                    if (gameState.status === "LOBBY") {
-                        updateState({ status: "STARTING", endTime: Date.now() + TIMINGS.STARTUP_DELAY });
-                    }
+                    if (gameState.status === "LOBBY") updateState({ status: "STARTING", endTime: Date.now() + TIMINGS.STARTUP_DELAY });
                 }
             }
         });
@@ -308,6 +308,41 @@
     async function setupAudio() {
         const audioRoot = await new BS.GameObject({ name: "Audio" }).Async();
         audio.tick = await audioRoot.AddComponent(new BS.BanterAudioSource({ volume: 0.3, loop: false, playOnAwake: false }));
+    }
+
+    // --- Player Pushing Logic ---
+    async function setupPlayerHandColliders() {
+        scene.On("user-joined", (e) => setupUserHandColliders(e.detail));
+        scene.On("user-left", (e) => cleanupUserHandColliders(e.detail.uid));
+        Object.values(scene.users || {}).forEach(u => setupUserHandColliders(u));
+    }
+
+    async function setupUserHandColliders(user) {
+        if (userHandColliders.has(user.uid)) return;
+        const left = await createHandTrigger(user.uid, BS.LegacyAttachmentPosition.LEFT_HAND, "Left");
+        const right = await createHandTrigger(user.uid, BS.LegacyAttachmentPosition.RIGHT_HAND, "Right");
+        userHandColliders.set(user.uid, [left, right]);
+    }
+
+    async function createHandTrigger(uid, attachment, side) {
+        const obj = await new BS.GameObject({ name: `HandTrigger_${uid}_${side}` }).Async();
+        // Slightly visible for testing
+        await obj.AddComponent(new BS.BanterSphere({ radius: 0.15 }));
+        await obj.AddComponent(new BS.BanterMaterial({ shaderName: "Unlit/DiffuseTransparent", color: new BS.Vector4(1, 0, 0, 0.3) }));
+        await obj.AddComponent(new BS.BoxCollider({ isTrigger: true, size: new BS.Vector3(0.3, 0.3, 0.3) }));
+        // Add ColliderEvents so tiles can see it
+        await obj.AddComponent(new BS.BanterColliderEvents());
+        obj.SetLayer(0); // Default layer to ensure it hits tiles
+        scene.LegacyAttachObject(obj, uid, attachment);
+        return obj;
+    }
+
+    function cleanupUserHandColliders(uid) {
+        const hands = userHandColliders.get(uid);
+        if (hands) {
+            hands.forEach(h => h.Destroy());
+            userHandColliders.delete(uid);
+        }
     }
 
     function setupNetworking() {
