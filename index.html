@@ -1,17 +1,140 @@
 <!DOCTYPE html>
 <html lang="en-AU">
-    <head>
-        <meta charset="UTF-8" />
-        <link id="favicon" rel="icon" href="https://firer.at/files/favicon.ico" type="image/x-icon" />
-        <meta name="color-scheme" content="dark">
-        <meta property="og:title" content="Sinking Tiles Game">
-        <meta property="og:description" content="FireR.at's Website/Space for Sinking Tiles Game">
-        <meta property="og:image" content="https://cdn.sidequestvr.com/file/1345509/dalle-2024-11-17-124101-a-stylized-fire-rat-fully-made-of-flames-designed-in-a-colored-pencil-art-style-on-textured-paper-the-flames-flow-seamlessly-across-the-rats-form.jpg">
-        <title>FireR.at's Website/Space</title>
-        <link rel="stylesheet" href="https://firer.at/pages/style.css" />
-        <script src="./bullshcript.js?027"></script>
-    </head>
-    <body>
-        <span>Hello, This is a space for Banter, Visit it inside the Banter App!</span>
-    </body>
+  <head>
+    <!-- WEB PAGE HEAD START -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#00ff44">
+    <title>Sinking Tiles | Multiplayer Floor-Is-Falling Game for AltspaceVR &amp; BanterVR | FireR.at</title>
+    <meta name="description" content="Sinking Tiles is a multiplayer game room for AltspaceVR (altvr.app) and BanterVR. Every tile you stand on sinks away beneath you. Keep moving across the layers and be the last player standing.">
+    <meta name="keywords" content="Sinking Tiles, Hexagone, floor is falling, tile game, AltspaceVR game, Banter game, altvr.app, VR party game, FireRat">
+    <meta name="author" content="FireRat">
+    <meta name="robots" content="index, follow">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="FireR.at">
+    <meta property="og:title" content="Sinking Tiles | Multiplayer Floor-Is-Falling Game for AltspaceVR &amp; BanterVR">
+    <meta property="og:description" content="Sinking Tiles is a multiplayer game room for AltspaceVR (altvr.app) and BanterVR. Every tile you stand on sinks away beneath you. Keep moving across the layers and be the last player standing.">
+    <meta property="og:url" content="https://sink.firer.at/">
+    <meta property="og:image" content="https://cdn.sidequestvr.com/file/4077387/firerat-10.jpeg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Sinking Tiles | Multiplayer Floor-Is-Falling Game for AltspaceVR &amp; BanterVR">
+    <meta name="twitter:description" content="Sinking Tiles is a multiplayer game room for AltspaceVR (altvr.app) and BanterVR. Every tile you stand on sinks away beneath you. Keep moving across the layers and be the last player standing.">
+    <meta name="twitter:image" content="https://cdn.sidequestvr.com/file/4077387/firerat-10.jpeg">
+    <link rel="canonical" href="https://sink.firer.at/">
+    <link rel="icon" href="https://firer.at/files/favicon.ico" type="image/x-icon">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "VideoGame",
+      "name": "Sinking Tiles Game",
+      "url": "https://sink.firer.at/",
+      "image": "https://cdn.sidequestvr.com/file/4077387/firerat-10.jpeg",
+      "description": "Sinking Tiles is a multiplayer game room for AltspaceVR (altvr.app) and BanterVR. Every tile you stand on sinks away beneath you. Keep moving across the layers and be the last player standing.",
+      "gamePlatform": [
+        "AltspaceVR",
+        "BanterVR"
+      ],
+      "applicationCategory": "GameApplication",
+      "playMode": "MultiPlayer",
+      "numberOfPlayers": {
+        "@type": "QuantitativeValue",
+        "minValue": 1,
+        "maxValue": 30
+      },
+      "author": {
+        "@type": "Person",
+        "name": "FireRat",
+        "url": "https://firer.at/"
+      },
+      "isPartOf": {
+        "@type": "WebPage",
+        "url": "https://firer.at/games.html"
+      }
+    }
+    </script>
+    <script>
+      // In Altspace or Banter this page is the space itself, so the web page part is hidden.
+      (function () {
+        var hide = function () { document.documentElement.classList.add('in-space'); };
+        if (window.isBanter || window.BS) hide();
+        window.addEventListener('bs-loaded', hide);
+      })();
+    </script>
+    <link rel="stylesheet" href="https://firer.at/pages/nstyle.css">
+    <script src="https://firer.at/scripts/RandomBG.js"></script>
+    <style>
+      .in-space .fire-page, .in-space body::before, .in-space body::after { display: none !important; }
+      .fire-page .info-block ul, .fire-page .info-block ol { color: var(--text-secondary); margin: 0 0 1.25rem 1.4rem; }
+      .fire-page li { margin-bottom: 0.4rem; }
+      .fire-page .info-block { margin-bottom: 3rem; }
+      .fire-page .room-url { font-size: 1.15em; }
+      .fire-page .hero-shot { width: 100%; max-height: 420px; object-fit: cover; border-radius: 16px; margin: 0 0 2rem; display: block; }
+      .fire-page footer { text-align: center; }
+    </style>
+    <!-- WEB PAGE HEAD END -->
+    <!-- The game: in Altspace or Banter this script builds the whole room -->
+    <script src="./bullshcript.js?027"></script>
+  </head>
+  <body>
+<!-- WEB PAGE START: shown in a normal browser, hidden in Altspace and Banter -->
+<div class="fire-page">
+  <div class="ambient-glow-2"></div>
+  <div class="container">
+    <header>
+      <span class="eyebrow">Altspace &amp; Banter game room</span>
+      <h1><span class="text-gradient">Sinking Tiles</span></h1>
+      <p><strong>Every tile you touch sinks. Keep moving.</strong></p>
+      <p>Layers of tiles float above each other. Every tile you step on turns grey and drops away, even if you stand still. Fall through a hole and you land on the layer below. Fall through the bottom layer and you are out.</p>
+    </header>
+
+    <nav>
+      <a href="https://firer.at/games.html" class="buttonG buttonss buttonActive">&larr; All games</a>
+      <a href="https://firer.at/" class="buttonss buttonMain">FireR.at</a>
+      <a href="https://sidequestvr.com/space/2496" class="buttonY buttonss" target="_blank">SideQuest page</a>
+      <a href="https://github.com/FireRat666/SinkingTiles" class="buttonW buttonss" target="_blank">GitHub</a>
+      <a href="https://ko-fi.com/FireRat666" class="buttonGY buttonss" target="_blank">Ko-fi</a>
+    </nav>
+
+    <main>
+      <img class="hero-shot" src="https://cdn.sidequestvr.com/file/4077387/firerat-10.jpeg" alt="Sinking Tiles in Altspace" loading="lazy">
+
+      <section class="info-block" id="play">
+        <h2>Play it</h2>
+        <p>Sinking Tiles is a whole room, not a game you add to your own world. Open it as a space in VR or on desktop:</p>
+        <ul>
+          <li><strong>Altspace:</strong> type <code class="room-url">sink.firer.at</code> into the search bar.</li>
+          <li><strong>Banter:</strong> open <code class="room-url">https://sink.firer.at</code> as a space.</li>
+        </ul>
+        <p>The game runs entirely in the space, so there is no server and nothing to install.</p>
+      </section>
+
+      <section class="info-block" id="how">
+        <h2>How to play</h2>
+        <ol><li>Press <strong>JOIN GAME</strong>. The game starts 10 seconds after the first player joins.</li><li>Every tile you stand on turns grey and drops away, even if you stand still.</li><li>Keep moving! Fall through a hole and you land on the layer below.</li><li>Fall through the bottom layer and you are out.</li><li>The last player standing wins. Playing alone? Survive as long as you can.</li></ol>
+      </section>
+
+      <section class="info-block" id="controls">
+        <h2>Controls</h2>
+        <p>The control panels are in the lobby. Host controls only show for the host, and anyone can claim host.</p>
+        <ul><li><strong>Layers</strong>: 1, 3 or 5 layers of tiles (lobby only).</li><li><strong>Tiles</strong>: big 8x8 tiles or small 12x12 tiles (lobby only).</li><li><strong>Sink</strong>: how fast a tile drops after you step on it.</li><li><strong>Start now</strong>: skip the countdown. <strong>Reset</strong>: end the game.</li><li><strong>Claim host</strong>: take over if the host has left.</li><li><strong>Sound</strong>: turn the game sounds on or off, just for you.</li></ul>
+      </section>
+
+      <section class="info-block" id="scores">
+        <h2>Scoreboard</h2>
+        <p>The scoreboard in the lobby keeps <strong>most wins</strong>, <strong>best survival time</strong> and <strong>most falls</strong>. Scores stay with the room.</p>
+      </section>
+    </main>
+
+    <footer>
+      <p>Sinking Tiles Game by FireRat. Open <a href="https://sink.firer.at">sink.firer.at</a> as a space in Altspace or Banter to play.</p>
+      <p>&copy; <span class="fire-year"></span> <a href="https://firer.at/">FireR.at</a></p>
+    </footer>
+  </div>
+  <script>
+    document.querySelectorAll('.fire-year').forEach(el => { el.textContent = new Date().getFullYear(); });
+  </script>
+</div>
+<!-- WEB PAGE END -->
+  </body>
 </html>
